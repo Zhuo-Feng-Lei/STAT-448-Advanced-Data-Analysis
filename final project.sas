@@ -1,0 +1,69 @@
+proc format;
+	invalue missing_nines 9 = .;
+	invalue missing_ninenine 99=.;
+	invalue missing_nineninenine 999=.;
+	invalue missing_bmi 99.9=.;
+run;
+data natality_train;
+	infile "/home/zlei50/STAT 448/training_certainvar.csv" dsd firstobs=2;
+	input TBO_REC	PRIORLIVE	PRIORDEAD	PRIORTERM	PREVIS	CIG_0	CIG_1	CIG_2	CIG_3	M_HT_IN	BMI	PWGT_R	DWGT_R	WTGAIN	DOB_YY	BFACIL	MAGER9	RESTATUS	MBRACE	DMAR	MEDUC	FAGEREC11	FEDUC	FRACE6	ILLB_R11	ILOP_R11	PRECARE	F_TOBACO	NO_RISKS	NO_INFEC	NO_MMORB	ATTEND	PAY	DPLURAL	DBWT	NO_ABNORM	NO_CONGEN	F_BFED	GESTREC3	APGAR5;
+	informat TBO_REC missing_nines. PREVIS CIG_0 CIG_1 CIG_2 CIG_3 M_HT_IN WTGAIN PRIORLIVE PRIORDEAD PRIORTERM missing_ninenine. PWGT_R DWGT_R missing_nineninenine. BMI missing_bmi.;
+	if 0<=APGAR5<=6 then APGAR_Y = 0; else APGAR_Y = 1;
+run;
+
+data natality_test;
+	infile "/home/zlei50/STAT 448/testing_certainvar.csv" dsd firstobs=2;
+	input TBO_REC	PRIORLIVE	PRIORDEAD	PRIORTERM	PREVIS	CIG_0	CIG_1	CIG_2	CIG_3	M_HT_IN	BMI	PWGT_R	DWGT_R	WTGAIN	DOB_YY	BFACIL	MAGER9	RESTATUS	MBRACE	DMAR	MEDUC	FAGEREC11	FEDUC	FRACE6	ILLB_R11	ILOP_R11	PRECARE	F_TOBACO	NO_RISKS	NO_INFEC	NO_MMORB	ATTEND	PAY	DPLURAL	DBWT	NO_ABNORM	NO_CONGEN	F_BFED	GESTREC3	APGAR5;
+	informat TBO_REC missing_nines. PREVIS CIG_0 CIG_1 CIG_2 CIG_3 M_HT_IN WTGAIN PRIORLIVE PRIORDEAD PRIORTERM missing_ninenine. PWGT_R DWGT_R missing_nineninenine. BMI missing_bmi.;
+	if 0<=APGAR5<=6 then APGAR_Y = 0; else APGAR_Y = 1;
+run;
+
+proc logistic data = natality_train;
+	class DOB_YY BFACIL MAGER9 RESTATUS MBRACE DMAR MEDUC FAGEREC11  FEDUC FRACE6  ILLB_R11 ILOP_R11 PRECARE  F_TOBACO NO_RISKS NO_INFEC NO_MMORB ATTEND PAY DPLURAL DBWT NO_ABNORM NO_CONGEN F_BFED GESTREC3;
+	model APGAR_Y = DOB_YY BFACIL MAGER9 RESTATUS MBRACE DMAR MEDUC FAGEREC11  FEDUC FRACE6  ILLB_R11 ILOP_R11 PRECARE  F_TOBACO NO_RISKS NO_INFEC NO_MMORB ATTEND PAY DPLURAL DBWT NO_ABNORM NO_CONGEN F_BFED GESTREC3 PRIORLIVE PRIORDEAD PRIORTERM PREVIS CIG_0 CIG_1 CIG_2 CIG_3 M_Ht_In BMI PWgt_R DWgt_R WTGAIN;
+	score data=natality_test out=testResults;
+run;
+
+proc logistic data = natality_train;
+	class DOB_YY BFACIL MAGER9 RESTATUS MBRACE DMAR MEDUC FAGEREC11  FEDUC FRACE6  ILLB_R11 ILOP_R11 PRECARE  F_TOBACO NO_RISKS NO_INFEC NO_MMORB ATTEND PAY DPLURAL DBWT NO_ABNORM NO_CONGEN F_BFED GESTREC3 PRIORLIVE PRIORDEAD PRIORTERM PREVIS CIG_0 CIG_1 CIG_2 CIG_3 M_Ht_In BMI PWgt_R DWgt_R WTGAIN;
+	model APGAR_Y = DOB_YY BFACIL MAGER9 RESTATUS MBRACE DMAR MEDUC FAGEREC11  FEDUC FRACE6  ILLB_R11 ILOP_R11 PRECARE  F_TOBACO NO_RISKS NO_INFEC NO_MMORB ATTEND PAY DPLURAL DBWT NO_ABNORM NO_CONGEN F_BFED GESTREC3 PRIORLIVE PRIORDEAD PRIORTERM PREVIS CIG_0 CIG_1 CIG_2 CIG_3 M_Ht_In BMI PWgt_R DWgt_R WTGAIN;
+	score data=natality_test out=testResults;
+run;
+
+proc freq data=testResults;
+tables f_response*i_response;
+run;
+
+/* Discriminant Analysis */
+proc discrim data= natality_train testdata=natality_test outstat=disc1 manova wcov crossvalidate pool=test;
+	class APGAR_Y;
+	var PRIORLIVE PRIORDEAD PRIORTERM PREVIS CIG_0 CIG_1 CIG_2 CIG_3 M_Ht_In PWgt_R DWgt_R;
+	priors proportional;
+run;
+
+/* Using selection procedure to pick the best predictors */
+proc stepdisc data = natality_train method = stepwise sls=0.05 sle=0.05;
+	class APGAR_Y;
+	var PRIORLIVE PRIORDEAD PRIORTERM PREVIS CIG_0 CIG_1 CIG_2 CIG_3 M_Ht_In BMI PWgt_R DWgt_R WTGAIN;
+run;
+
+/* Classification Tree */
+proc hpsplit data=natality_train maxdepth=7 cvmodelfit seed=448;
+class APGAR_Y DOB_YY BFACIL MAGER9 RESTATUS MBRACE DMAR MEDUC FAGEREC11  FEDUC FRACE6  ILLB_R11 ILOP_R11 PRECARE  F_TOBACO NO_RISKS NO_INFEC NO_MMORB ATTEND PAY DPLURAL DBWT NO_ABNORM NO_CONGEN F_BFED GESTREC3;
+model APGAR_Y = DOB_YY BFACIL MAGER9 RESTATUS MBRACE DMAR MEDUC FAGEREC11  FEDUC FRACE6  ILLB_R11 ILOP_R11 PRECARE  F_TOBACO NO_RISKS NO_INFEC NO_MMORB ATTEND PAY DPLURAL DBWT NO_ABNORM NO_CONGEN F_BFED GESTREC3 PRIORLIVE PRIORDEAD PRIORTERM PREVIS CIG_0 CIG_1 CIG_2 CIG_3 M_Ht_In BMI PWgt_R DWgt_R WTGAIN;
+grow entropy;
+prune costcomplexity;
+code file="/home/zlei50/STAT 448/projecttreeresults.sas";
+run;
+
+data scored;
+set natality_test;
+%include "/home/zlei50/STAT 448/projecttreeresults.sas";
+actual=APGAR_Y;
+if p_APGAR_Y0>.5 then predicted=0;
+else if p_APGAR_Y1>.5 then predicted=1;
+run;
+
+proc freq data=scored;
+tables actual*predicted /norow nocol;
+run;
